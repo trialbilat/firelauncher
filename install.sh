@@ -33,7 +33,7 @@ if echo "$OUT" | grep -qi "success"; then
 else
   echo
   echo "Fire OS refused to set the default (common). Options:"
-  echo "  1. Press Home on the remote; if a chooser appears, pick 'Home' and choose Always."
+  echo "  1. Press Home on the remote; if a chooser appears, pick 'purpledlauncher' and choose Always."
   echo "  2. See README.md, 'If it won't become the default', for the disable-stock-launcher route."
 fi
 

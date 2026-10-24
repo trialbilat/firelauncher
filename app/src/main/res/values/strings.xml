@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Home</string>
+    <string name="app_name">purpledlauncher</string>
     <string name="all_apps">All apps</string>
     <string name="hint_dock">Press DOWN on the remote to see all apps</string>
     <string name="hint_back">Press BACK to return home   ·   MENU button: add or remove from the bottom bar</string>

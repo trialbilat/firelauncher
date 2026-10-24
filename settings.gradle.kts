@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "FireLauncher"
+rootProject.name = "purpledlauncher"
 include(":app")

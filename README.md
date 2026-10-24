@@ -1,4 +1,4 @@
-# Fire TV Launcher
+# purpledlauncher
 
 A simple custom home screen for Fire TV (Fire OS, Android-based). It shows every installed app in a D-pad friendly grid with a clock. Back is ignored, Home returns to the top, and the Menu button opens App info for the highlighted app (uninstall / force stop).
 
@@ -27,7 +27,7 @@ The script connects, installs, and tries `cmd package set-home-activity` to make
 
 Amazon blocks `set-home-activity` on some Fire OS builds. Try, in order:
 
-1. Press Home on the remote. If Android shows a chooser, pick **Home** and choose **Always**.
+1. Press Home on the remote. If Android shows a chooser, pick **purpledlauncher** and choose **Always**.
 2. Disable the stock launcher (reversible, but can misbehave on some builds):
 
    ```
