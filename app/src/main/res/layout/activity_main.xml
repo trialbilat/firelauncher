@@ -15,6 +15,7 @@
         android:layout_height="match_parent"
         android:background="@drawable/scrim" />
 
+    <!-- Home screen: header + big favourites bar. Nothing else. -->
     <LinearLayout
         android:id="@+id/mainContent"
         android:layout_width="match_parent"
@@ -23,9 +24,8 @@
         android:paddingLeft="32dp"
         android:paddingTop="20dp"
         android:paddingRight="32dp"
-        android:paddingBottom="14dp">
+        android:paddingBottom="16dp">
 
-        <!-- Header: weather chip, greeting + clock, quick pills -->
         <RelativeLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content">
@@ -146,67 +146,105 @@
             </LinearLayout>
         </RelativeLayout>
 
-        <!-- Focused app name -->
-        <RelativeLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="20dp">
-
-            <TextView
-                android:id="@+id/menuHint"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_alignParentRight="true"
-                android:layout_centerVertical="true"
-                android:letterSpacing="0.08"
-                android:text="@string/hint"
-                android:textColor="#99FFFFFF"
-                android:textSize="12sp" />
-
-            <TextView
-                android:id="@+id/focusTitle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_toLeftOf="@id/menuHint"
-                android:ellipsize="end"
-                android:maxLines="1"
-                android:text="@string/your_apps"
-                android:textColor="#FFFFFF"
-                android:textSize="28sp"
-                android:textStyle="bold" />
-        </RelativeLayout>
-
-        <!-- All apps as big cards -->
-        <GridView
-            android:id="@+id/grid"
+        <!-- Empty space so the wallpaper can breathe -->
+        <View
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_marginTop="6dp"
-            android:layout_weight="1"
-            android:clipToPadding="false"
-            android:drawSelectorOnTop="true"
-            android:fadingEdge="none"
-            android:focusable="true"
-            android:horizontalSpacing="0dp"
-            android:listSelector="@drawable/card_selector"
-            android:numColumns="4"
-            android:overScrollMode="never"
-            android:scrollbars="none"
-            android:stretchMode="columnWidth"
-            android:verticalSpacing="0dp" />
+            android:layout_weight="1" />
 
-        <!-- Bottom app bar -->
+        <!-- Favourites bar -->
         <LinearLayout
             android:id="@+id/dock"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center_horizontal"
-            android:layout_marginTop="6dp"
             android:background="@drawable/dock_bg"
             android:gravity="center"
             android:orientation="horizontal"
-            android:padding="6dp" />
+            android:padding="8dp" />
+
+        <TextView
+            android:id="@+id/dockHint"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="10dp"
+            android:letterSpacing="0.06"
+            android:text="@string/hint_dock"
+            android:textColor="#B3FFFFFF"
+            android:textSize="14sp" />
     </LinearLayout>
+
+    <!-- All apps (hidden until you press Down on the favourites bar) -->
+    <FrameLayout
+        android:id="@+id/allAppsPanel"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#E6080C18"
+        android:clickable="true"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:paddingLeft="32dp"
+            android:paddingTop="22dp"
+            android:paddingRight="32dp"
+            android:paddingBottom="14dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/all_apps"
+                    android:textColor="#FFFFFF"
+                    android:textSize="28sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/gridTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginLeft="18dp"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="#B3FFFFFF"
+                    android:textSize="18sp" />
+            </LinearLayout>
+
+            <GridView
+                android:id="@+id/grid"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_marginTop="6dp"
+                android:layout_weight="1"
+                android:clipToPadding="false"
+                android:drawSelectorOnTop="true"
+                android:fadingEdge="none"
+                android:focusable="true"
+                android:horizontalSpacing="0dp"
+                android:listSelector="@drawable/card_selector"
+                android:numColumns="4"
+                android:overScrollMode="never"
+                android:scrollbars="none"
+                android:stretchMode="columnWidth"
+                android:verticalSpacing="0dp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_horizontal"
+                android:text="@string/hint_back"
+                android:textColor="#99FFFFFF"
+                android:textSize="13sp" />
+        </LinearLayout>
+    </FrameLayout>
 
     <!-- Weather details overlay -->
     <FrameLayout

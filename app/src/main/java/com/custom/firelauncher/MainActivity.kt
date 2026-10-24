@@ -73,6 +73,10 @@ class MainActivity : Activity() {
     private val ui = Handler(Looper.getMainLooper())
     private val adapter = AppAdapter()
     private var apps: List<AppEntry> = emptyList()
+    private val dockFocusListener = View.OnFocusChangeListener { v, hasFocus ->
+        val scale = if (hasFocus) 1.1f else 1f
+        v.animate().scaleX(scale).scaleY(scale).setDuration(120).start()
+    }
     private var lastSelected: View? = null
 
     private var weather: Weather? = null
@@ -83,7 +87,8 @@ class MainActivity : Activity() {
     private lateinit var wallpaperView: ImageView
     private lateinit var mainContent: ViewGroup
     private lateinit var grid: GridView
-    private lateinit var focusTitle: TextView
+    private lateinit var gridTitle: TextView
+    private lateinit var allAppsPanel: View
     private lateinit var greeting: TextView
     private lateinit var clock: TextView
     private lateinit var clockSuffix: TextView
@@ -125,7 +130,8 @@ class MainActivity : Activity() {
         wallpaperView = findViewById(R.id.wallpaper)
         mainContent = findViewById(R.id.mainContent)
         grid = findViewById(R.id.grid)
-        focusTitle = findViewById(R.id.focusTitle)
+        gridTitle = findViewById(R.id.gridTitle)
+        allAppsPanel = findViewById(R.id.allAppsPanel)
         greeting = findViewById(R.id.greeting)
         clock = findViewById(R.id.clock)
         clockSuffix = findViewById(R.id.clockSuffix)
@@ -152,6 +158,7 @@ class MainActivity : Activity() {
         grid.adapter = adapter
         grid.onItemClickListener = AdapterView.OnItemClickListener { _, _, position, _ ->
             launch(adapter.getItem(position))
+            hideAllApps()
         }
         grid.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
@@ -159,7 +166,7 @@ class MainActivity : Activity() {
                 lastSelected = view
                 if (grid.hasFocus()) scaleCard(view, 1.04f)
                 if (position in 0 until adapter.count) {
-                    focusTitle.text = adapter.getItem(position).label
+                    gridTitle.text = adapter.getItem(position).label
                 }
             }
 
@@ -181,7 +188,7 @@ class MainActivity : Activity() {
         applyWallpaper()
         updateClock()
         updateWeatherChip()
-        grid.requestFocus()
+        focusDock()
     }
 
     override fun onStart() {
@@ -209,9 +216,8 @@ class MainActivity : Activity() {
         super.onNewIntent(intent)
         if (intent?.hasCategory(Intent.CATEGORY_HOME) == true) {
             if (weatherPanel.visibility == View.VISIBLE) hideWeather()
-            grid.setSelection(0)
-            grid.smoothScrollToPosition(0)
-            grid.requestFocus()
+            if (allAppsPanel.visibility == View.VISIBLE) hideAllApps()
+            focusDock()
         }
     }
 
@@ -219,12 +225,29 @@ class MainActivity : Activity() {
     @Suppress("OVERRIDE_DEPRECATION")
     override fun onBackPressed() {
         if (weatherPanel.visibility == View.VISIBLE) hideWeather()
+        else if (allAppsPanel.visibility == View.VISIBLE) hideAllApps()
     }
 
     // Menu button (three lines on the Fire TV remote): pin / unpin / app info for the highlighted app.
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        if (keyCode == KeyEvent.KEYCODE_MENU && weatherPanel.visibility != View.VISIBLE) {
+        val weatherOpen = weatherPanel.visibility == View.VISIBLE
+        val appsOpen = allAppsPanel.visibility == View.VISIBLE
+        if (keyCode == KeyEvent.KEYCODE_MENU && !weatherOpen) {
             focusedApp()?.let { showAppMenu(it) }
+            return true
+        }
+        // Down on the favourites bar reveals every app.
+        if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN && !weatherOpen && !appsOpen &&
+            currentFocus?.parent === dock
+        ) {
+            showAllApps()
+            return true
+        }
+        // Up from the top row of the grid goes back home.
+        if (keyCode == KeyEvent.KEYCODE_DPAD_UP && appsOpen &&
+            grid.selectedItemPosition in 0 until grid.numColumns
+        ) {
+            hideAllApps()
             return true
         }
         return super.onKeyDown(keyCode, event)
@@ -357,6 +380,7 @@ class MainActivity : Activity() {
     }
 
     private fun rebuildDock() {
+        val hadFocus = dock.hasFocus()
         dock.removeAllViews()
         val byPackage = apps.associateBy { it.packageName }
         val inflater = LayoutInflater.from(this)
@@ -365,17 +389,45 @@ class MainActivity : Activity() {
             val item = inflater.inflate(R.layout.item_dock, dock, false)
             val icon = app.icon.constantState?.newDrawable()?.mutate() ?: app.icon
             item.findViewById<ImageView>(R.id.dockIcon).setImageDrawable(icon)
+            item.findViewById<TextView>(R.id.dockLabel).text = app.label
             item.tag = app
             item.setOnClickListener { launch(app) }
-            item.onFocusChangeListener = View.OnFocusChangeListener { v, hasFocus ->
-                val s = if (hasFocus) 1.12f else 1f
-                v.animate().scaleX(s).scaleY(s).setDuration(120).start()
-                if (hasFocus) focusTitle.text = app.label
-            }
+            item.onFocusChangeListener = dockFocusListener
             dock.addView(item)
         }
-        dock.visibility = if (dock.childCount == 0) View.GONE else View.VISIBLE
-        if (currentFocus == null) grid.requestFocus()
+        // Always-present "All apps" tile, so the grid is reachable by clicking too.
+        val all = inflater.inflate(R.layout.item_dock, dock, false)
+        all.findViewById<ImageView>(R.id.dockIcon).setImageResource(R.drawable.ic_apps)
+        all.findViewById<TextView>(R.id.dockLabel).text = getString(R.string.all_apps)
+        all.tag = "ALL"
+        all.setOnClickListener { showAllApps() }
+        all.onFocusChangeListener = dockFocusListener
+        dock.addView(all)
+
+        if (hadFocus || (currentFocus == null && allAppsPanel.visibility != View.VISIBLE)) focusDock()
+    }
+
+    private fun focusDock() {
+        if (dock.childCount > 0) dock.getChildAt(0).requestFocus()
+    }
+
+    private fun showAllApps() {
+        mainContent.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+        allAppsPanel.alpha = 0f
+        allAppsPanel.translationY = dp(60).toFloat()
+        allAppsPanel.visibility = View.VISIBLE
+        allAppsPanel.animate().alpha(1f).translationY(0f).setDuration(180).start()
+        grid.setSelection(0)
+        grid.requestFocus()
+    }
+
+    private fun hideAllApps() {
+        if (allAppsPanel.visibility != View.VISIBLE) return
+        allAppsPanel.animate().cancel()
+        allAppsPanel.visibility = View.GONE
+        mainContent.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+        // Land back on the "All apps" tile, where they came from.
+        dock.getChildAt(dock.childCount - 1)?.requestFocus()
     }
 
     private fun showAppMenu(app: AppEntry) {
@@ -395,8 +447,8 @@ class MainActivity : Activity() {
     private fun togglePin(app: AppEntry) {
         val pins = pinnedPackages().toMutableList()
         if (!pins.remove(app.packageName)) {
-            if (pins.size >= 8) {
-                Toast.makeText(this, "The bottom bar holds up to 8 apps", Toast.LENGTH_SHORT).show()
+            if (pins.size >= 6) {
+                Toast.makeText(this, "The bottom bar holds up to 6 apps", Toast.LENGTH_SHORT).show()
                 return
             }
             pins.add(app.packageName)
