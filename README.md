@@ -49,3 +49,20 @@ If the screen is ever stuck blank, `adb connect <ip>:5555` then `adb shell pm en
 
 - Grid, colours, clock: `app/src/main/res/layout/activity_main.xml` and `res/drawable/`
 - App list and behaviour: `app/src/main/java/com/custom/firelauncher/MainActivity.kt`
+
+## Privacy and debloat
+
+First, the no-risk way (no ADB): on the TV go to Settings > Preferences > Privacy Settings and turn off
+Device Usage Data, Collect App Usage Data and Interest-based Ads. Under Preferences > Featured Content,
+turn off video and audio autoplay.
+
+For more, `debloat.sh` disables packages from `packages.txt` using `pm disable-user` (reversible):
+
+```
+./debloat.sh <ip> list      # see what's installed
+./debloat.sh <ip> dry       # preview, changes nothing
+./debloat.sh <ip> apply
+./debloat.sh <ip> restore   # undo
+```
+
+Package names differ between Fire OS versions and some system packages can't be disabled without extra privileges.

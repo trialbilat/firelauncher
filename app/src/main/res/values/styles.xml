@@ -3,4 +3,17 @@
     <style name="LauncherTheme" parent="@android:style/Theme.Material.NoActionBar">
         <item name="android:windowBackground">@drawable/bg_home</item>
     </style>
+
+    <style name="Pill">
+        <item name="android:background">@drawable/pill_bg</item>
+        <item name="android:clickable">true</item>
+        <item name="android:focusable">true</item>
+        <item name="android:gravity">center</item>
+        <item name="android:paddingLeft">18dp</item>
+        <item name="android:paddingRight">18dp</item>
+        <item name="android:paddingTop">9dp</item>
+        <item name="android:paddingBottom">9dp</item>
+        <item name="android:textColor">#FFFFFF</item>
+        <item name="android:textSize">14sp</item>
+    </style>
 </resources>

@@ -1,0 +1,12 @@
+# Starter list for debloat.sh, one package per line. Lines starting with # are ignored.
+#
+# These are crash/log reporting services that are commonly reported as safe to disable.
+# I could not verify this list against a maintained source, so treat it as a starting point:
+# run `./debloat.sh <ip> dry` first, and use `./debloat.sh <ip> list` to see what your TV has.
+# Everything is reversible with `./debloat.sh <ip> restore`.
+#
+# Deliberately NOT included: system updates (security fixes), Alexa/voice, the Play/app store,
+# Wi-Fi, and anything that looks like core system services.
+
+com.amazon.device.logmanager
+com.amazon.device.crashmanager
