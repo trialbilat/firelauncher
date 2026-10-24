@@ -10,6 +10,14 @@
         android:contentDescription="@null"
         android:scaleType="centerCrop" />
 
+    <ImageView
+        android:id="@+id/wallpaperFade"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:alpha="0"
+        android:contentDescription="@null"
+        android:scaleType="centerCrop" />
+
     <View
         android:layout_width="match_parent"
         android:layout_height="match_parent"

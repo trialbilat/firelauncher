@@ -46,14 +46,20 @@ data class AppEntry(
 
 class MainActivity : Activity() {
 
-    private val wallpapers = listOf(
-        "Crimson" to R.drawable.wp_crimson,
-        "Ocean" to R.drawable.wp_ocean,
-        "Aurora" to R.drawable.wp_aurora,
-        "Sunset" to R.drawable.wp_sunset,
-        "Midnight" to R.drawable.wp_midnight,
-        "Forest" to R.drawable.wp_forest
-    )
+    companion object {
+        const val MODE_NATURE = 0
+        const val MODE_PLAIN = 1
+        const val MODE_CUSTOM = -1
+        const val ROTATE_MS = 60_000L
+    }
+
+    private val photoDir: File by lazy { File(cacheDir, "nature").apply { mkdirs() } }
+    private val rotateRunnable = Runnable { showNextPhoto() }
+    private var lastChangeAt = 0L
+    private var currentPhoto: String? = null
+    private var lastFetchAttempt = 0L
+    @Volatile private var fetching = false
+    @Volatile private var photoStatus: String? = null
 
     // Pinned to the bottom bar by default if installed (you can change this with the Menu button).
     private val preferredPackages = listOf(
@@ -85,6 +91,7 @@ class MainActivity : Activity() {
     private var weatherJob = 0
 
     private lateinit var wallpaperView: ImageView
+    private lateinit var wallpaperFade: ImageView
     private lateinit var mainContent: ViewGroup
     private lateinit var grid: GridView
     private lateinit var gridTitle: TextView
@@ -128,6 +135,7 @@ class MainActivity : Activity() {
         setContentView(R.layout.activity_main)
 
         wallpaperView = findViewById(R.id.wallpaper)
+        wallpaperFade = findViewById(R.id.wallpaperFade)
         mainContent = findViewById(R.id.mainContent)
         grid = findViewById(R.id.grid)
         gridTitle = findViewById(R.id.gridTitle)
@@ -202,6 +210,8 @@ class MainActivity : Activity() {
         registerReceiver(packageReceiver, filter)
         loadApps()
         ui.post(clockTick)
+        scheduleRotation()
+        if (wallpaperMode() == MODE_NATURE) refreshPhotos()
         refreshWeather(false)
     }
 
@@ -209,6 +219,7 @@ class MainActivity : Activity() {
         super.onStop()
         unregisterReceiver(packageReceiver)
         ui.removeCallbacks(clockTick)
+        ui.removeCallbacks(rotateRunnable)
     }
 
     // Pressing Home while already on the launcher closes overlays and jumps back to the top.
@@ -462,37 +473,167 @@ class MainActivity : Activity() {
     private fun customWallpaperFile(): File? =
         getExternalFilesDir(null)?.let { File(it, "wallpaper.jpg") }
 
+    private fun wallpaperMode(): Int = prefs.getInt("wallpaper_mode", MODE_NATURE)
+
     private fun applyWallpaper() {
-        val choice = prefs.getInt("wallpaper", 0)
-        val custom = customWallpaperFile()
-        if (choice == -1 && custom != null && custom.exists()) {
-            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            BitmapFactory.decodeFile(custom.path, bounds)
-            var sample = 1
-            while (bounds.outWidth / (sample * 2) >= 1280) sample *= 2
-            val opts = BitmapFactory.Options().apply { inSampleSize = sample }
-            val bitmap = BitmapFactory.decodeFile(custom.path, opts)
-            if (bitmap != null) {
-                wallpaperView.setImageBitmap(bitmap)
-                return
+        ui.removeCallbacks(rotateRunnable)
+        wallpaperFade.animate().cancel()
+        wallpaperFade.alpha = 0f
+        wallpaperFade.setImageDrawable(null)
+        wallpaperView.setImageResource(R.drawable.wp_midnight) // plain background; photos fade in over it
+
+        when (wallpaperMode()) {
+            MODE_NATURE -> {
+                lastChangeAt = 0L
+                currentPhoto = null
+                scheduleRotation()
+                refreshPhotos()
+            }
+            MODE_CUSTOM -> {
+                val custom = customWallpaperFile()
+                if (custom != null && custom.exists()) {
+                    val bitmap = decodePhoto(custom)
+                    if (bitmap != null) wallpaperView.setImageBitmap(bitmap)
+                }
             }
         }
-        wallpaperView.setImageResource(wallpapers[choice.coerceIn(0, wallpapers.size - 1)].second)
+    }
+
+    private fun cachedPhotos(): List<File> =
+        photoDir.listFiles { f -> f.name.endsWith(".jpg") }?.toList().orEmpty()
+
+    private fun decodePhoto(file: File): android.graphics.Bitmap? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(file.path, bounds)
+        if (bounds.outWidth <= 0) return null
+        var sample = 1
+        while (bounds.outWidth / (sample * 2) >= 1920) sample *= 2
+        return try {
+            BitmapFactory.decodeFile(file.path, BitmapFactory.Options().apply { inSampleSize = sample })
+        } catch (e: OutOfMemoryError) {
+            null
+        }
+    }
+
+    private fun scheduleRotation() {
+        ui.removeCallbacks(rotateRunnable)
+        if (wallpaperMode() != MODE_NATURE) return
+        val wait = if (lastChangeAt == 0L) 0L
+        else (ROTATE_MS - (SystemClock.elapsedRealtime() - lastChangeAt)).coerceAtLeast(0L)
+        ui.postDelayed(rotateRunnable, wait)
+    }
+
+    private fun showNextPhoto() {
+        ui.removeCallbacks(rotateRunnable)
+        if (wallpaperMode() != MODE_NATURE) return
+
+        val files = cachedPhotos()
+        if (files.isEmpty()) {
+            ui.postDelayed(rotateRunnable, 10_000) // nothing downloaded yet; look again shortly
+            refreshPhotos()
+            return
+        }
+        val choices = if (files.size > 1) files.filter { it.path != currentPhoto } else files
+        val next = choices.random()
+        lastChangeAt = SystemClock.elapsedRealtime()
+        ui.postDelayed(rotateRunnable, ROTATE_MS)
+        refreshPhotos() // tops the cache up in the background
+
+        Thread {
+            val bitmap = decodePhoto(next)
+            runOnUiThread {
+                if (bitmap == null) {
+                    next.delete()
+                } else if (wallpaperMode() == MODE_NATURE) {
+                    currentPhoto = next.path
+                    crossfadeTo(bitmap)
+                }
+            }
+        }.start()
+    }
+
+    /** Fades the new picture in over the old one, then makes it the base layer. */
+    private fun crossfadeTo(bitmap: android.graphics.Bitmap) {
+        wallpaperFade.animate().cancel()
+        wallpaperFade.setImageBitmap(bitmap)
+        wallpaperFade.alpha = 0f
+        wallpaperFade.animate().alpha(1f).setDuration(1500).withEndAction {
+            wallpaperView.setImageBitmap(bitmap)
+            wallpaperFade.alpha = 0f
+            wallpaperFade.setImageDrawable(null)
+        }.start()
+    }
+
+    private fun refreshPhotos() {
+        if (fetching) return
+        val have = cachedPhotos().size
+        val age = System.currentTimeMillis() - prefs.getLong("photos_refreshed", 0L)
+        if (have >= 12 && age < 6 * 3_600_000L) return
+        val now = SystemClock.elapsedRealtime()
+        if (lastFetchAttempt != 0L && now - lastFetchAttempt < 60_000L) return
+        lastFetchAttempt = now
+        fetching = true
+
+        Thread {
+            try {
+                val list = NaturePhotos.fetchList()
+                if (list.isEmpty()) {
+                    photoStatus = "couldn't reach the photo service"
+                } else {
+                    photoStatus = null
+                    var added = 0
+                    for (photo in list) {
+                        if (added >= 10) break
+                        val dest = File(photoDir, photo.id + ".jpg")
+                        if (dest.exists()) continue
+                        if (NaturePhotos.download(photo.url, dest)) {
+                            added++
+                            if (have == 0 && added == 1) {
+                                runOnUiThread { if (wallpaperMode() == MODE_NATURE) showNextPhoto() }
+                            }
+                        }
+                    }
+                    if (added == 0 && have == 0) photoStatus = "couldn't download any photos"
+                    // keep the cache small: drop the oldest beyond 24
+                    val all = cachedPhotos().sortedBy { it.lastModified() }
+                    for (old in all.dropLast(24)) {
+                        if (old.path != currentPhoto) old.delete()
+                    }
+                    prefs.edit().putLong("photos_refreshed", System.currentTimeMillis()).apply()
+                }
+            } catch (e: Exception) {
+                photoStatus = "couldn't download photos"
+            } finally {
+                fetching = false
+            }
+        }.start()
     }
 
     private fun showWallpaperPicker() {
-        val names = ArrayList<String>(wallpapers.map { it.first })
+        val count = cachedPhotos().size
+        val problem = photoStatus
+        val status = when {
+            count > 0 -> "$count photos ready"
+            problem != null -> problem
+            else -> "downloading…"
+        }
+        val modes = ArrayList<Int>()
+        val names = ArrayList<String>()
+        modes.add(MODE_NATURE)
+        names.add("Nature photos (new one every minute)\n$status")
+        modes.add(MODE_PLAIN)
+        names.add("Plain dark")
         val custom = customWallpaperFile()
-        val hasCustom = custom != null && custom.exists()
-        if (hasCustom) names.add("Custom image")
-        val saved = prefs.getInt("wallpaper", 0)
-        val current = if (saved == -1) names.size - 1 else saved.coerceIn(0, wallpapers.size - 1)
+        if (custom != null && custom.exists()) {
+            modes.add(MODE_CUSTOM)
+            names.add("Custom image")
+        }
+        val current = modes.indexOf(wallpaperMode()).coerceAtLeast(0)
 
         AlertDialog.Builder(this, AlertDialog.THEME_DEVICE_DEFAULT_DARK)
             .setTitle("Wallpaper")
             .setSingleChoiceItems(names.toTypedArray(), current) { dialog, which ->
-                val value = if (hasCustom && which == names.size - 1) -1 else which
-                prefs.edit().putInt("wallpaper", value).apply()
+                prefs.edit().putInt("wallpaper_mode", modes[which]).apply()
                 applyWallpaper()
                 dialog.dismiss()
             }
